@@ -1,6 +1,7 @@
 const express = require('express')
 const app = express()
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+const jwt = require('jsonwebtoken');
 require('dotenv').config()
 const stripe = require('stripe')(process.env.STRIPE_SECRET_PAYMENT_KEY)
 
@@ -32,10 +33,18 @@ async function run() {
     await client.connect();
 
     const petCollection = client.db('petAdoption').collection('allPet')
+    const usersCollection = client.db('petAdoption').collection('users')
     const adoptedPetCollection = client.db('petAdoption').collection('adoptedPet')
     const donationCampaignCollection = client.db('petAdoption').collection('donationCampaign')
     const paymentsCollection = client.db('petAdoption').collection('payments')
     // const myDonationCollection = client.db('petAdoption').collection('myDonation')
+
+    app.post('/jwt-users', async(req, res) => {
+      const user = req.body;
+      const token = jwt.sign(user, process.env.JSON_ACCESS_TOKEN_SECRET, {expiresIn: '1hr'})
+
+      res.send({token})
+    })
 
 
     app.get('/all-pets', async (req, res) => {
@@ -85,8 +94,58 @@ async function run() {
       res.send({result, adoptedUpdatedResult})
     })
 
+
+    // users api
+    app.post('/users', async(req, res) => {
+      const query = req.body;
+      const userEmail = {email: query.email}
+      const emailIsExists = await usersCollection.findOne(userEmail)
+
+      if(emailIsExists) {
+        return res.send({ message: 'User Already Exists', insertedId: null })
+      }
+
+      const result = await usersCollection.insertOne(query)
+      res.send(result)
+    })
+
+    app.get('/users', async(req, res) => {
+      const result = await usersCollection.find().toArray();
+      res.send(result)
+    })
+
+    // update user role user to admin
+    app.patch('/users/:id', async (req, res) => {
+      // const {role} = req.body;
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) }
+
+      const updateDoc = {
+        $set: {
+          role: 'admin'
+        }
+      }
+
+      const result = await usersCollection.updateOne(filter, updateDoc)
+      res.send(result)
+    })
+
+    
+    
+
+
+    // adopted pet get by id for dashboard > admin
     app.get('/adoptedPet', async(req, res) => {
       const result = await adoptedPetCollection.find().toArray();
+      res.send(result)
+    })
+
+    // adopted pet get by id for dashboard > users > adoption request
+    app.get('/adoptedPet/:email', async (req, res) => {
+      const email = req.params.email;
+
+      const query = { email: email }
+      const result = await adoptedPetCollection.find(query).toArray();
       res.send(result)
     })
 
@@ -224,7 +283,33 @@ async function run() {
 
 
     
+    //admin dashboard
+    app.delete('/all-pets/:id', async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) }
+      const result = await petCollection.deleteOne(query)
+      res.send(result)
+    })
 
+    // update adopted
+    // update user
+    app.patch('/all-pets/:id', async (req, res) => {
+      const {adopted} = req.body;
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) }
+
+      const updateDoc = {
+        $set: {
+          adopted: !adopted
+        }
+      }
+
+      const result = await petCollection.updateOne(filter, updateDoc)
+      res.send(result)
+    })
+
+
+    
 
 
 
