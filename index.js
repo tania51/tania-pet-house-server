@@ -30,13 +30,14 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
-    await client.connect();
+    // await client.connect();
 
     const petCollection = client.db('petAdoption').collection('allPet')
     const usersCollection = client.db('petAdoption').collection('users')
     const adoptedPetCollection = client.db('petAdoption').collection('adoptedPet')
     const donationCampaignCollection = client.db('petAdoption').collection('donationCampaign')
     const paymentsCollection = client.db('petAdoption').collection('payments')
+    const addedCollection = client.db('petAdoption').collection('added-pets')
     // const myDonationCollection = client.db('petAdoption').collection('myDonation')
 
     app.post('/jwt-users', async(req, res) => {
@@ -48,7 +49,31 @@ async function run() {
 
 
     app.get('/all-pets', async (req, res) => {
-      const result = await petCollection.find().toArray();
+      
+      const query = {}
+      const options = {
+        sort: {
+          date: -1
+        }
+      }
+      const result = await petCollection.find(query, options).toArray();
+
+      res.send(result)
+    })
+
+    // sorting pets for pet listing
+
+    app.get('/all-sort-pets', async (req, res) => {
+      // const filter = req.query;
+      // console.log(filter);
+
+      const query = {adopted: false}
+      const options = {
+        sort: {
+          date: -1
+        }
+      }
+      const result = await petCollection.find(query, options).toArray();
 
       res.send(result)
     })
@@ -74,6 +99,17 @@ async function run() {
     app.post('/all-pets', async(req, res) => {
       const query = req.body;
       const result = await petCollection.insertOne(query)
+      res.send(result)
+    })
+
+    app.post('/all-added-pets', async(req, res) => {
+      const query = req.body;
+      const result = await addedCollection.insertOne(query)
+      res.send(result)
+    })
+
+    app.get('/my-added-pets', async(req, res) => {
+      const result = await addedCollection.find().toArray();
       res.send(result)
     })
 
@@ -112,6 +148,23 @@ async function run() {
     app.get('/users', async(req, res) => {
       const result = await usersCollection.find().toArray();
       res.send(result)
+    })
+
+    //is Admin check
+    app.get('/users/admin/:email', async(req, res) => {
+      const email = req.params.email;
+      console.log(email);
+      // if(email !== req.decoded.email) {
+      //   return res.status(403).send({message : 'unAuthorized'})
+      // }
+      const query = {email : email} 
+      const user = await usersCollection.findOne(query);
+      if(user) {
+        admin = user?.role === 'admin'
+      }
+      // console.log(admin);
+      res.send({admin})
+
     })
 
     // update user role user to admin
@@ -263,12 +316,26 @@ async function run() {
 
 
 
+    // get all donation campaigns from paymentsCollection
+    app.get('/my-donation-campaigns', async (req, res) => {
+      const result = await paymentsCollection.find().toArray()
+      res.send(result)
+    })
+
     // get single donation campaigns from paymentsCollection
     app.get('/my-donation-campaigns/:id', async (req, res) => {
       const id = req.params.id;
 
       const query = { _id: new ObjectId(id) }
       const result = await paymentsCollection.findOne(query)
+      res.send(result)
+    })
+    
+    // delete 
+    app.delete('/my-donation-campaigns/:id', async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) }
+      const result = await paymentsCollection.deleteOne(query)
       res.send(result)
     })
 
@@ -284,16 +351,37 @@ async function run() {
 
     
     //admin dashboard
-    app.delete('/all-pets/:id', async (req, res) => {
+    // app.delete('/all-pets/:id', async (req, res) => {
+    //   const id = req.params.id;
+    //   const query = { _id: new ObjectId(id) }
+    //   const result = await petCollection.deleteOne(query)
+    //   res.send(result)
+    // })
+    app.delete('/my-added-pets/:id', async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) }
-      const result = await petCollection.deleteOne(query)
+      const result = await addedCollection.deleteOne(query)
       res.send(result)
     })
 
     // update adopted
     // update user
-    app.patch('/all-pets/:id', async (req, res) => {
+    // app.patch('/all-pets/:id', async (req, res) => {
+    //   const {adopted} = req.body;
+    //   const id = req.params.id;
+    //   const filter = { _id: new ObjectId(id) }
+
+    //   const updateDoc = {
+    //     $set: {
+    //       adopted: !adopted
+    //     }
+    //   }
+
+    //   const result = await petCollection.updateOne(filter, updateDoc)
+    //   res.send(result)
+    // })
+
+    app.patch('/my-added-pets/:id', async (req, res) => {
       const {adopted} = req.body;
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) }
@@ -304,7 +392,7 @@ async function run() {
         }
       }
 
-      const result = await petCollection.updateOne(filter, updateDoc)
+      const result = await addedCollection.updateOne(filter, updateDoc)
       res.send(result)
     })
 
